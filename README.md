@@ -90,9 +90,71 @@ This DAG automates the process of fetching data from one or more APIs, transform
 - **Load Data to Database**: Inserts the transformed data into the target database table. Automatic table creation is ensured if necessary.
 
 ```python
-# Similar structure as CSV to Database DAG, but replace CSV extraction with API calls.
-# Transform data and load into database. Also, ensure automatic table creation in the target database.
-# Define appropriate functions and operators for each task.
+from datetime import datetime, timedelta
+from airflow import DAG
+from airflow.operators.python_operator import PythonOperator
+from airflow.providers.postgres.hooks.postgres import PostgresHook
+import requests
+
+# Define default arguments
+default_args = {
+    'owner': 'airflow',
+    'depends_on_past': False,
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
+    'start_date': datetime(2024, 5, 1),
+}
+
+# Function to fetch data from API
+def fetch_data_from_api():
+    response = requests.get('https://api.example.com/data')
+    data = response.json()
+    return data
+
+# Function to transform data
+def transform_data(data):
+    transformed_data = data  # Placeholder, replace with actual transformations
+    return transformed_data
+
+# Function to load data into database
+def load_data_to_database(transformed_data):
+    postgres_hook = PostgresHook(postgres_conn_id='postgres_default')
+    
+    table_create_query = """
+    CREATE TABLE IF NOT EXISTS target_table (
+        column1 TYPE,
+        column2 TYPE,
+        ...
+    );
+    """
+    postgres_hook.run(table_create_query)
+    
+    postgres_hook.insert_rows(table='target_table', rows=transformed_data)
+
+# Define the DAG
+with DAG('api_to_database_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
+    
+    extract_task = PythonOperator(
+        task_id='fetch_data_from_api',
+        python_callable=fetch_data_from_api
+    )
+    
+    transform_task = PythonOperator(
+        task_id='transform_data',
+        python_callable=transform_data,
+        provide_context=True
+    )
+    
+    load_task = PythonOperator(
+        task_id='load_data_to_database',
+        python_callable=load_data_to_database,
+        provide_context=True
+    )
+    
+    extract_task >> transform_task >> load_task
+
 ```
 
 ## 3. DAG to Call Stored Procedure:
@@ -240,6 +302,4 @@ with DAG('db_to_db_dag', default_args=default_args, schedule_interval='@daily', 
     extract_task >> transform_task >> load_task
 ```
 
-```
-
-This combined document provides both the Airflow DAG scripts and detailed descriptions for each DAG, making it a comprehensive resource for understanding and implementing the data pipeline automation tasks.
+These Airflow DAG scripts provide a foundation for automating various data pipeline tasks and database interactions. By leveraging Airflow's flexibility and scalability, users can customize and extend these workflows to suit their specific requirements and environments.
