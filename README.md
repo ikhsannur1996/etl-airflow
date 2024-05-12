@@ -37,23 +37,57 @@ def extract_data():
     return data
 
 # Function to transform data
+# Function to transform data
 def transform_data(data):
-    transformed_data = data  # Placeholder, replace with actual transformations
-    return transformed_data
+    # Multiple filters: 
+    filtered_data = data[(data['column1'] > value1) & (data['column2'] == 'desired_string')]
+    
+    # Replace string values in a column:
+    filtered_data['column_to_replace'] = filtered_data['column_to_replace'].replace('old_value', 'new_value')
+    
+    # Using CASE WHEN statement:
+    filtered_data['new_column'] = np.select(
+        [
+            filtered_data['column3'] > threshold,
+            filtered_data['column3'] <= threshold
+        ],
+        [
+            'value_greater_than_threshold',
+            'value_less_than_or_equal_to_threshold'
+        ],
+        default='other_value'
+    )
+    
+    # Sorting the filtered data by another column, for example, 'sort_column'
+    sorted_data = filtered_data.sort_values(by='sort_column')
+    
+    return sorted_data
 
 # Function to load data into database
-def load_data_to_database(transformed_data):
+def load_data_to_database(**kwargs):
+    transformed_data = kwargs['ti'].xcom_pull(task_ids='transform_data')
     postgres_hook = PostgresHook(postgres_conn_id='postgres_default')
     
-    table_create_query = """
-    CREATE TABLE IF NOT EXISTS target_table (
-        column1 TYPE,
-        column2 TYPE,
-        ...
+    table_exists_query = """
+    SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+        AND table_name = 'target_table'
     );
     """
-    postgres_hook.run(table_create_query)
+    table_exists = postgres_hook.get_first(table_exists_query)[0]
     
+    if not table_exists:
+        # If table doesn't exist, create it
+        create_query = f"""
+        CREATE TABLE target_table (
+            {', '.join([f'{col} TEXT' for col in transformed_data.columns])}
+        );
+        """
+        postgres_hook.run(create_query)
+    
+    # Insert data into the table
     postgres_hook.insert_rows(table='target_table', rows=transformed_data.values.tolist())
 
 # Define the DAG
@@ -77,6 +111,7 @@ with DAG('csv_to_database_dag', default_args=default_args, schedule_interval='@d
     )
     
     extract_task >> transform_task >> load_task
+
 ```
 
 ## 2. DAG from API to Database:
