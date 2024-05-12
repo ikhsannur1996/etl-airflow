@@ -313,9 +313,9 @@ This DAG automates the process of extracting data from a source database, applyi
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
-from airflow.providers
-
-.postgres.hooks.postgres import PostgresHook
+from airflow.providers.postgres.hooks.postgres import PostgresHook
+import pandas as pd
+from airflow.models import Variable
 
 # Define default arguments
 default_args = {
@@ -335,23 +335,34 @@ def extract_data_from_source():
 
 # Function to transform data
 def transform_data(data):
-    transformed_data = data  # Placeholder, replace with actual transformations
-    return transformed_data
+    # Convert fetched data to DataFrame
+    df = pd.DataFrame(data, columns=['column1', 'column2', ...])  # Assuming you know column names
+    
+    # Perform transformations using pandas
+    transformed_df = df  # Placeholder, replace with actual transformations
+    
+    return transformed_df
 
 # Function to load data into target database
-def load_data_to_target(transformed_data):
+def load_data_to_target(**kwargs):
+    transformed_data = kwargs['ti'].xcom_pull(task_ids='transform_data')
+    
+    # Retrieve target table columns from Airflow Variables
+    target_columns = Variable.get('target_table_columns', deserialize_json=True)
+    
+    # Retrieve target database connection
     postgres_hook = PostgresHook(postgres_conn_id='target_db_conn')
     
-    table_create_query = """
+    # Automatically create table if it doesn't exist
+    create_query = f"""
     CREATE TABLE IF NOT EXISTS target_table (
-        column1 TYPE,
-        column2 TYPE,
-        ...
+        {', '.join([f'{col} TEXT' for col in target_columns])}
     );
     """
-    postgres_hook.run(table_create_query)
+    postgres_hook.run(create_query)
     
-    postgres_hook.insert_rows(table='target_table', rows=transformed_data)
+    # Load data into target table
+    postgres_hook.insert_rows(table='target_table', rows=transformed_data.values.tolist())
 
 # Define the DAG
 with DAG('db_to_db_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
