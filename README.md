@@ -264,11 +264,39 @@ default_args = {
 # Define the DAG
 with DAG('call_query_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
     
-    call_query_task = PostgresOperator(
-        task_id='call_query',
+    # Extract data using SQL query
+    extract_query = """
+    SELECT * FROM your_table;
+    """
+    extract_task = PostgresOperator(
+        task_id='extract_data',
         postgres_conn_id='postgres_default',
-        sql="SELECT * FROM your_table;"
+        sql=extract_query
     )
+    
+    # Transform data using SQL query (optional)
+    transform_query = """
+    -- Your transformation query here
+    """
+    transform_task = PostgresOperator(
+        task_id='transform_data',
+        postgres_conn_id='postgres_default',
+        sql=transform_query
+    )
+    
+    # Load data using SQL query
+    load_query = """
+    INSERT INTO target_table
+    SELECT * FROM your_extracted_table;
+    """
+    load_task = PostgresOperator(
+        task_id='load_data_to_database',
+        postgres_conn_id='postgres_default',
+        sql=load_query
+    )
+    
+    # Define task dependencies
+    extract_task >> transform_task >> load_task
 ```
 
 ## 5. DAG from Database to Database (Extract >> Transform >> Load):
