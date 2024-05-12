@@ -37,7 +37,6 @@ def extract_data():
     return data
 
 # Function to transform data
-# Function to transform data
 def transform_data(data):
     # Multiple filters: 
     filtered_data = data[(data['column1'] > value1) & (data['column2'] == 'desired_string')]
@@ -129,6 +128,7 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
+import pandas as pd
 import requests
 
 # Define default arguments
@@ -150,23 +150,35 @@ def fetch_data_from_api():
 
 # Function to transform data
 def transform_data(data):
-    transformed_data = data  # Placeholder, replace with actual transformations
-    return transformed_data
+    # Transform JSON data to DataFrame
+    df = pd.DataFrame(data)
+    
+    # Filter and transform data using pandas
+    transformed_df = df[df['column1'] > 0]  # Example filter
+    transformed_df['column2'] = transformed_df['column2'].str.upper()  # Example transformation
+    
+    return transformed_df
 
 # Function to load data into database
-def load_data_to_database(transformed_data):
-    postgres_hook = PostgresHook(postgres_conn_id='postgres_default')
+def load_data_to_database(**kwargs):
+    transformed_data = kwargs['ti'].xcom_pull(task_ids='transform_data')
     
-    table_create_query = """
+    # Retrieve connection from Airflow
+    postgres_hook = PostgresHook(postgres_conn_id='your_postgres_connection_id')
+    
+    # Analyze data types of transformed data
+    data_types = {col: 'TEXT' for col, dtype in transformed_data.dtypes.items()}
+    
+    # Create table if it doesn't exist
+    create_query = f"""
     CREATE TABLE IF NOT EXISTS target_table (
-        column1 TYPE,
-        column2 TYPE,
-        ...
+        {', '.join([f'{col} {data_types[col]}' for col in transformed_data.columns])}
     );
     """
-    postgres_hook.run(table_create_query)
+    postgres_hook.run(create_query)
     
-    postgres_hook.insert_rows(table='target_table', rows=transformed_data)
+    # Load data into the table
+    transformed_data.to_sql('target_table', postgres_hook.get_sqlalchemy_engine(), if_exists='append', index=False)
 
 # Define the DAG
 with DAG('api_to_database_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
@@ -189,7 +201,6 @@ with DAG('api_to_database_dag', default_args=default_args, schedule_interval='@d
     )
     
     extract_task >> transform_task >> load_task
-
 ```
 
 ## 3. DAG to Call Stored Procedure:
