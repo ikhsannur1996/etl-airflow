@@ -283,39 +283,6 @@ with DAG('db_to_db_dag', default_args=default_args, schedule_interval='@daily', 
     extract_task >> transform_task >> load_task
 ```
 
-## 5. DAG to Call Stored Procedure:
-
-### Description:
-This DAG triggers the execution of a stored procedure in a database. It is useful for automating routine database operations or executing complex business logic stored in the database.
-
-### Task Details:
-- **Call Stored Procedure**: This task uses the PostgresOperator (or appropriate operator for the database type) to execute a predefined stored procedure in the target database. It ensures that the execution status of the stored procedure is monitored.
-
-```python
-from datetime import datetime, timedelta
-from airflow import DAG
-from airflow.operators.postgres_operator import PostgresOperator
-
-# Define default arguments
-default_args = {
-    'owner': 'airflow',
-    'depends_on_past': False,
-    'email_on_failure': False,
-    'email_on_retry': False,
-    'retries': 1,
-    'retry_delay': timedelta(minutes=5),
-    'start_date': datetime(2024, 5, 1),
-}
-
-# Define the DAG
-with DAG('call_stored_procedure_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
-    
-    call_stored_procedure_task = PostgresOperator(
-        task_id='call_stored_procedure',
-        postgres_conn_id='postgres_default',
-        sql="CALL your_stored_procedure();"
-    )
-```
 ## 4. DAG to Call Query:
 
 ### Description:
@@ -377,5 +344,40 @@ with DAG('call_query_dag', default_args=default_args, schedule_interval='@daily'
     # Define task dependencies
     extract_task >> transform_task >> load_task
 ```
+
+## 5. DAG to Call Stored Procedure:
+
+### Description:
+This DAG triggers the execution of a stored procedure in a database. It is useful for automating routine database operations or executing complex business logic stored in the database.
+
+### Task Details:
+- **Call Stored Procedure**: This task uses the PostgresOperator (or appropriate operator for the database type) to execute a predefined stored procedure in the target database. It ensures that the execution status of the stored procedure is monitored.
+
+```python
+from datetime import datetime, timedelta
+from airflow import DAG
+from airflow.operators.postgres_operator import PostgresOperator
+
+# Define default arguments
+default_args = {
+    'owner': 'airflow',
+    'depends_on_past': False,
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
+    'start_date': datetime(2024, 5, 1),
+}
+
+# Define the DAG
+with DAG('call_stored_procedure_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
+    
+    call_stored_procedure_task = PostgresOperator(
+        task_id='call_stored_procedure',
+        postgres_conn_id='postgres_default',
+        sql="CALL your_stored_procedure();"
+    )
+```
+
 
 These Airflow DAG scripts provide a foundation for automating various data pipeline tasks and database interactions. By leveraging Airflow's flexibility and scalability, users can customize and extend these workflows to suit their specific requirements and environments.
