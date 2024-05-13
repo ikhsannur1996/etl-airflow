@@ -132,41 +132,45 @@ default_args = {
 
 # Function to fetch data from API
 def fetch_data_from_api():
-    response = requests.get('https://api.example.com/data')
+    response = requests.get('https://api.sampleapis.com/simpsons/characters')
     data = response.json()
     return data
 
 # Function to transform data
-def transform_data(data):
+def transform_data(**kwargs):
+    data = kwargs['ti'].xcom_pull(task_ids='fetch_data_from_api')
     # Transform JSON data to DataFrame
     df = pd.DataFrame(data)
     
     # Filter and transform data using pandas
-    transformed_df = df[df['column1'] > 0]  # Example filter
-    transformed_df['column2'] = transformed_df['column2'].str.upper()  # Example transformation
+    transformed_df = df[df['gender'] == 'f'] 
     
     return transformed_df
 
+custom_schema = 'ikhsan'
+
 # Function to load data into database
+# Define the custom schema name
 def load_data_to_database(**kwargs):
     transformed_data = kwargs['ti'].xcom_pull(task_ids='transform_data')
     
     # Retrieve connection from Airflow
-    postgres_hook = PostgresHook(postgres_conn_id='your_postgres_connection_id')
+    postgres_hook = PostgresHook(postgres_conn_id='postgres')
     
     # Analyze data types of transformed data
     data_types = {col: 'TEXT' for col, dtype in transformed_data.dtypes.items()}
     
     # Create table if it doesn't exist
     create_query = f"""
-    CREATE TABLE IF NOT EXISTS target_table (
+    CREATE TABLE IF NOT EXISTS {custom_schema}.target_table (
         {', '.join([f'{col} {data_types[col]}' for col in transformed_data.columns])}
     );
     """
     postgres_hook.run(create_query)
     
-    # Load data into the table
-    transformed_data.to_sql('target_table', postgres_hook.get_sqlalchemy_engine(), if_exists='append', index=False)
+    # Load data into the table with custom schema
+    transformed_data.to_sql('target_table', postgres_hook.get_sqlalchemy_engine(), schema=custom_schema, if_exists='append', index=False)
+
 
 # Define the DAG
 with DAG('api_to_database_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
@@ -191,103 +195,7 @@ with DAG('api_to_database_dag', default_args=default_args, schedule_interval='@d
     extract_task >> transform_task >> load_task
 ```
 
-## 3. DAG to Call Stored Procedure:
-
-### Description:
-This DAG triggers the execution of a stored procedure in a database. It is useful for automating routine database operations or executing complex business logic stored in the database.
-
-### Task Details:
-- **Call Stored Procedure**: This task uses the PostgresOperator (or appropriate operator for the database type) to execute a predefined stored procedure in the target database. It ensures that the execution status of the stored procedure is monitored.
-
-```python
-from datetime import datetime, timedelta
-from airflow import DAG
-from airflow.operators.postgres_operator import PostgresOperator
-
-# Define default arguments
-default_args = {
-    'owner': 'airflow',
-    'depends_on_past': False,
-    'email_on_failure': False,
-    'email_on_retry': False,
-    'retries': 1,
-    'retry_delay': timedelta(minutes=5),
-    'start_date': datetime(2024, 5, 1),
-}
-
-# Define the DAG
-with DAG('call_stored_procedure_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
-    
-    call_stored_procedure_task = PostgresOperator(
-        task_id='call_stored_procedure',
-        postgres_conn_id='postgres_default',
-        sql="CALL your_stored_procedure();"
-    )
-```
-
-## 4. DAG to Call Query:
-
-### Description:
-This DAG executes predefined SQL queries on a database. It is commonly used for performing data manipulation or retrieval operations on the database.
-
-### Task Details:
-- **Call Query**: This task executes predefined SQL queries using the PostgresOperator (or equivalent operator). It handles the execution of queries and ensures proper error handling and logging.
-
-```python
-from datetime import datetime, timedelta
-from airflow import DAG
-from airflow.operators.postgres_operator import PostgresOperator
-
-# Define default arguments
-default_args = {
-    'owner': 'airflow',
-    'depends_on_past': False,
-    'email_on_failure': False,
-    'email_on_retry': False,
-    'retries': 1,
-    'retry_delay': timedelta(minutes=5),
-    'start_date': datetime(2024, 5, 1),
-}
-
-# Define the DAG
-with DAG('call_query_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
-    
-    # Extract data using SQL query
-    extract_query = """
-    SELECT * FROM your_table;
-    """
-    extract_task = PostgresOperator(
-        task_id='extract_data',
-        postgres_conn_id='postgres_default',
-        sql=extract_query
-    )
-    
-    # Transform data using SQL query (optional)
-    transform_query = """
-    -- Your transformation query here
-    """
-    transform_task = PostgresOperator(
-        task_id='transform_data',
-        postgres_conn_id='postgres_default',
-        sql=transform_query
-    )
-    
-    # Load data using SQL query
-    load_query = """
-    INSERT INTO target_table
-    SELECT * FROM your_extracted_table;
-    """
-    load_task = PostgresOperator(
-        task_id='load_data_to_database',
-        postgres_conn_id='postgres_default',
-        sql=load_query
-    )
-    
-    # Define task dependencies
-    extract_task >> transform_task >> load_task
-```
-
-## 5. DAG from Database to Database (Extract >> Transform >> Load):
+## 3. DAG from Database to Database (Extract >> Transform >> Load):
 
 ### Description:
 This DAG automates the process of extracting data from a source database, applying necessary transformations, and loading the transformed data into a target database. It is useful for data migration or synchronization between databases.
@@ -372,6 +280,101 @@ with DAG('db_to_db_dag', default_args=default_args, schedule_interval='@daily', 
         provide_context=True
     )
     
+    extract_task >> transform_task >> load_task
+```
+
+## 5. DAG to Call Stored Procedure:
+
+### Description:
+This DAG triggers the execution of a stored procedure in a database. It is useful for automating routine database operations or executing complex business logic stored in the database.
+
+### Task Details:
+- **Call Stored Procedure**: This task uses the PostgresOperator (or appropriate operator for the database type) to execute a predefined stored procedure in the target database. It ensures that the execution status of the stored procedure is monitored.
+
+```python
+from datetime import datetime, timedelta
+from airflow import DAG
+from airflow.operators.postgres_operator import PostgresOperator
+
+# Define default arguments
+default_args = {
+    'owner': 'airflow',
+    'depends_on_past': False,
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
+    'start_date': datetime(2024, 5, 1),
+}
+
+# Define the DAG
+with DAG('call_stored_procedure_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
+    
+    call_stored_procedure_task = PostgresOperator(
+        task_id='call_stored_procedure',
+        postgres_conn_id='postgres_default',
+        sql="CALL your_stored_procedure();"
+    )
+```
+## 4. DAG to Call Query:
+
+### Description:
+This DAG executes predefined SQL queries on a database. It is commonly used for performing data manipulation or retrieval operations on the database.
+
+### Task Details:
+- **Call Query**: This task executes predefined SQL queries using the PostgresOperator (or equivalent operator). It handles the execution of queries and ensures proper error handling and logging.
+
+```python
+from datetime import datetime, timedelta
+from airflow import DAG
+from airflow.operators.postgres_operator import PostgresOperator
+
+# Define default arguments
+default_args = {
+    'owner': 'airflow',
+    'depends_on_past': False,
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
+    'start_date': datetime(2024, 5, 1),
+}
+
+# Define the DAG
+with DAG('call_query_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
+    
+    # Extract data using SQL query
+    extract_query = """
+    SELECT * FROM your_table;
+    """
+    extract_task = PostgresOperator(
+        task_id='extract_data',
+        postgres_conn_id='postgres_default',
+        sql=extract_query
+    )
+    
+    # Transform data using SQL query (optional)
+    transform_query = """
+    -- Your transformation query here
+    """
+    transform_task = PostgresOperator(
+        task_id='transform_data',
+        postgres_conn_id='postgres_default',
+        sql=transform_query
+    )
+    
+    # Load data using SQL query
+    load_query = """
+    INSERT INTO target_table
+    SELECT * FROM your_extracted_table;
+    """
+    load_task = PostgresOperator(
+        task_id='load_data_to_database',
+        postgres_conn_id='postgres_default',
+        sql=load_query
+    )
+    
+    # Define task dependencies
     extract_task >> transform_task >> load_task
 ```
 
