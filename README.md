@@ -19,6 +19,7 @@ from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 import pandas as pd
+import numpy as np
 
 # Define default arguments
 default_args = {
@@ -33,46 +34,33 @@ default_args = {
 
 # Function to extract data from CSV
 def extract_data():
-    data = pd.read_csv('/path/to/csv/file.csv')
+    data = pd.read_csv('/opt/airflow/dags/dataset/employee_transaction.csv')
     return data
 
 # Function to transform data
-def transform_data(data):
-    # Multiple filters: 
-    filtered_data = data[(data['column1'] > value1) & (data['column2'] == 'desired_string')]
+# Function to transform data
+def transform_data(**kwargs):
+    # Retrieve data from XCom
+    data = kwargs['ti'].xcom_pull(task_ids='extract_data')
     
-    # Replace string values in a column:
-    filtered_data['column_to_replace'] = filtered_data['column_to_replace'].replace('old_value', 'new_value')
+    # Transform data  # Filter data where gender is 'male'
+    transformed_data =  data[data['gender'] == 'Male']    
     
-    # Using CASE WHEN statement:
-    filtered_data['new_column'] = np.select(
-        [
-            filtered_data['column3'] > threshold,
-            filtered_data['column3'] <= threshold
-        ],
-        [
-            'value_greater_than_threshold',
-            'value_less_than_or_equal_to_threshold'
-        ],
-        default='other_value'
-    )
-    
-    # Sorting the filtered data by another column, for example, 'sort_column'
-    sorted_data = filtered_data.sort_values(by='sort_column')
-    
-    return sorted_data
+    # Pass transformed data to the next task
+    return transformed_data
+
 
 # Function to load data into database
 def load_data_to_database(**kwargs):
     transformed_data = kwargs['ti'].xcom_pull(task_ids='transform_data')
-    postgres_hook = PostgresHook(postgres_conn_id='postgres_default')
+    postgres_hook = PostgresHook(postgres_conn_id='postgres')
     
     table_exists_query = """
     SELECT EXISTS (
         SELECT 1
         FROM information_schema.tables
         WHERE table_schema = 'public'
-        AND table_name = 'target_table'
+        AND table_name = 'male_employee'
     );
     """
     table_exists = postgres_hook.get_first(table_exists_query)[0]
@@ -80,14 +68,14 @@ def load_data_to_database(**kwargs):
     if not table_exists:
         # If table doesn't exist, create it
         create_query = f"""
-        CREATE TABLE target_table (
+        CREATE TABLE male_employee (
             {', '.join([f'{col} TEXT' for col in transformed_data.columns])}
         );
         """
         postgres_hook.run(create_query)
     
     # Insert data into the table
-    postgres_hook.insert_rows(table='target_table', rows=transformed_data.values.tolist())
+    postgres_hook.insert_rows(table='male_employee', rows=transformed_data.values.tolist())
 
 # Define the DAG
 with DAG('csv_to_database_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
