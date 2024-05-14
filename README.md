@@ -59,7 +59,7 @@ def load_data_to_database(**kwargs):
     SELECT EXISTS (
         SELECT 1
         FROM information_schema.tables
-        WHERE table_schema = 'public'
+        WHERE table_schema = 'ikhsan'
         AND table_name = 'male_employee'
     );
     """
@@ -162,14 +162,14 @@ def load_data_to_database(**kwargs):
     
     # Create table if it doesn't exist
     create_query = f"""
-    CREATE TABLE IF NOT EXISTS {custom_schema}.target_table (
+    CREATE TABLE IF NOT EXISTS {custom_schema}.api_table (
         {', '.join([f'{col} {data_types[col]}' for col in transformed_data.columns])}
     );
     """
     postgres_hook.run(create_query)
     
     # Load data into the table with custom schema
-    transformed_data.to_sql('target_table', postgres_hook.get_sqlalchemy_engine(), schema=custom_schema, if_exists='append', index=False)
+    transformed_data.to_sql('api_table', postgres_hook.get_sqlalchemy_engine(), schema=custom_schema, if_exists='append', index=False)
 
 
 # Define the DAG
@@ -236,13 +236,13 @@ def get_column_names(schema_name, table_name):
 
 def extract_data_from_source():
     postgres_hook = PostgresHook(postgres_conn_id='postgres')
-    data = postgres_hook.get_records(sql="SELECT * FROM public.male_employee;")
+    data = postgres_hook.get_records(sql="SELECT * FROM public.employee;")
     return data
 
 def transform_data(**context):
     data = context['ti'].xcom_pull(task_ids='extract_data_from_source')
     schema_name = 'public'
-    table_name = 'male_employee'
+    table_name = 'employee'
     column_names = get_column_names(schema_name, table_name)
     
     df = pd.DataFrame(data, columns=column_names)
@@ -269,7 +269,7 @@ def load_data_to_target(**kwargs):
     
     # Automatically create table if it doesn't exist
     create_query = f"""
-    CREATE TABLE IF NOT EXISTS male_employee_new (
+    CREATE TABLE IF NOT EXISTS employee (
         {', '.join([f'{col} TEXT' for col in target_columns])}
     );
     """
@@ -279,7 +279,7 @@ def load_data_to_target(**kwargs):
     rows = [tuple(record[col] for col in target_columns) for record in transformed_data]
     
     # Load data into target table
-    postgres_hook.insert_rows(table='male_employee_new', rows=rows, scheme='ikhsan', target_fields=target_columns)
+    postgres_hook.insert_rows(table='employee', rows=rows, scheme='ikhsan', target_fields=target_columns)
 
 # Define the DAG
 with DAG('db_to_db_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
