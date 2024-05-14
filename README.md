@@ -68,7 +68,7 @@ def load_data_to_database(**kwargs):
     if not table_exists:
         # If table doesn't exist, create it
         create_query = f"""
-        CREATE TABLE male_employee (
+        CREATE TABLE ikhsan.male_employee (
             {', '.join([f'{col} TEXT' for col in transformed_data.columns])}
         );
         """
@@ -98,7 +98,6 @@ with DAG('csv_to_database_dag', default_args=default_args, schedule_interval='@d
     )
     
     extract_task >> transform_task >> load_task
-
 ```
 
 ## 2. DAG from API to Database:
