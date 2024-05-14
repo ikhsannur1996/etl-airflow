@@ -52,6 +52,8 @@ def transform_data(**kwargs):
 
 # Function to load data into database
 def load_data_to_database(**kwargs):
+    from airflow.hooks.postgres_hook import PostgresHook
+    
     transformed_data = kwargs['ti'].xcom_pull(task_ids='transform_data')
     postgres_hook = PostgresHook(postgres_conn_id='postgres')
     
@@ -75,7 +77,25 @@ def load_data_to_database(**kwargs):
         postgres_hook.run(create_query)
     
     # Insert data into the table
-    postgres_hook.insert_rows(table='male_employee', scheme='ikhsan',rows=transformed_data.values.tolist())
+    insert_query = """
+    INSERT INTO ikhsan.male_employee ({columns})
+    VALUES %s
+    """
+    
+    columns = ', '.join(transformed_data.columns)
+    values = transformed_data.values.tolist()
+    
+    # Using execute_values to insert multiple rows
+    from psycopg2.extras import execute_values
+    connection = postgres_hook.get_conn()
+    cursor = connection.cursor()
+    
+    execute_values(cursor, insert_query.format(columns=columns), values)
+    
+    connection.commit()
+    cursor.close()
+    connection.close()
+
 
 # Define the DAG
 with DAG('csv_to_database_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
