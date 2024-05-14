@@ -269,7 +269,7 @@ def load_data_to_target(**kwargs):
     
     # Automatically create table if it doesn't exist
     create_query = f"""
-    CREATE TABLE IF NOT EXISTS employee (
+    CREATE TABLE IF NOT EXISTS ikhsan.employee (
         {', '.join([f'{col} TEXT' for col in target_columns])}
     );
     """
