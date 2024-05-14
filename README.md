@@ -331,42 +331,42 @@ default_args = {
 # Define the DAG
 with DAG('call_query_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
     
-    # Extract data using SQL query
-    extract_query = """
+    # Create table using SQL query
+    create_query = """
     CREATE TABLE IF NOT EXISTS "output".employee_output AS 
     SELECT *
     FROM public.employee;
     """
-    extract_task = PostgresOperator(
+    create_task = PostgresOperator(
         task_id='extract_data',
         postgres_conn_id='postgres',
-        sql=extract_query
+        sql=create_query
     )
     
-    # Transform data using SQL query (optional)
-    transform_query = """
+    # Truncate table using SQL query
+    truncate_query = """
     TRUNCATE TABLE "output".employee_output;
     """
-    transform_task = PostgresOperator(
-        task_id='transform_data',
+    truncate_task = PostgresOperator(
+        task_id='truncate_data',
         postgres_conn_id='postgres',
-        sql=transform_query
+        sql=truncate_query
     )
     
     # Load data using SQL query
-    load_query = """
+    insert_query = """
     INSERT INTO "output".employee_output 
     SELECT *
     FROM public.employee;
     """
-    load_task = PostgresOperator(
-        task_id='load_data_to_database',
+    insert_task = PostgresOperator(
+        task_id='insert_data_to_database',
         postgres_conn_id='postgres',
-        sql=load_query
+        sql=insert_query
     )
     
     # Define task dependencies
-    extract_task >> transform_task >> load_task
+    create_task >> truncate_task >> insert_task
 ```
 
 ## 5. DAG to Call Stored Procedure:
