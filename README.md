@@ -211,7 +211,6 @@ from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 import pandas as pd
-from airflow.models import Variable
 
 # Define default arguments
 default_args = {
@@ -224,41 +223,63 @@ default_args = {
     'start_date': datetime(2024, 5, 1),
 }
 
-# Function to extract data from source database
-def extract_data_from_source():
-    postgres_hook = PostgresHook(postgres_conn_id='source_db_conn')
-    return postgres_hook.get_records(sql="SELECT * FROM source_table;")
+def get_column_names(schema_name, table_name):
+    postgres_hook = PostgresHook(postgres_conn_id='postgres')
+    sql = f"""
+    SELECT column_name 
+    FROM information_schema.columns 
+    WHERE table_schema = '{schema_name}' AND table_name = '{table_name}';
+    """
+    columns = postgres_hook.get_records(sql)
+    column_names = [col[0] for col in columns]
+    return column_names
 
-# Function to transform data
-def transform_data(data):
-    # Convert fetched data to DataFrame
-    df = pd.DataFrame(data, columns=['column1', 'column2', ...])  # Assuming you know column names
+def extract_data_from_source():
+    postgres_hook = PostgresHook(postgres_conn_id='postgres')
+    data = postgres_hook.get_records(sql="SELECT * FROM public.male_employee;")
+    return data
+
+def transform_data(**context):
+    data = context['ti'].xcom_pull(task_ids='extract_data_from_source')
+    schema_name = 'public'
+    table_name = 'male_employee'
+    column_names = get_column_names(schema_name, table_name)
     
-    # Perform transformations using pandas
-    transformed_df = df  # Placeholder, replace with actual transformations
+    df = pd.DataFrame(data, columns=column_names)
     
-    return transformed_df
+    # Apply your transformations here, e.g., filter, add columns, etc.
+    transformed_df = df  # Placeholder for actual transformations
+    
+    # Convert DataFrame to list of dictionaries for loading
+    transformed_data = transformed_df.to_dict(orient='records')
+    return transformed_data
 
 # Function to load data into target database
 def load_data_to_target(**kwargs):
     transformed_data = kwargs['ti'].xcom_pull(task_ids='transform_data')
     
-    # Retrieve target table columns from Airflow Variables
-    target_columns = Variable.get('target_table_columns', deserialize_json=True)
+    if not transformed_data:
+        raise ValueError("No data available to load.")
     
     # Retrieve target database connection
-    postgres_hook = PostgresHook(postgres_conn_id='target_db_conn')
+    postgres_hook = PostgresHook(postgres_conn_id='postgres')
+    
+    # Infer target table columns from transformed data
+    target_columns = transformed_data[0].keys()
     
     # Automatically create table if it doesn't exist
     create_query = f"""
-    CREATE TABLE IF NOT EXISTS target_table (
+    CREATE TABLE IF NOT EXISTS male_employee_new (
         {', '.join([f'{col} TEXT' for col in target_columns])}
     );
     """
     postgres_hook.run(create_query)
     
+    # Prepare rows for insertion
+    rows = [tuple(record[col] for col in target_columns) for record in transformed_data]
+    
     # Load data into target table
-    postgres_hook.insert_rows(table='target_table', rows=transformed_data.values.tolist())
+    postgres_hook.insert_rows(table='male_employee_new', rows=rows, scheme='ikhsan', target_fields=target_columns)
 
 # Define the DAG
 with DAG('db_to_db_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
