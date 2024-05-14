@@ -374,15 +374,16 @@ This DAG triggers the execution of a stored procedure in a database. It is usefu
 ### Task Details:
 - **Call Stored Procedure**: This task uses the PostgresOperator (or appropriate operator for the database type) to execute a predefined stored procedure in the target database. It ensures that the execution status of the stored procedure is monitored.
 
+Store Procedure
 ```sql
 ------- CREATE TABLE
-CREATE OR REPLACE PROCEDURE dwh.generate_employee()
+CREATE OR REPLACE PROCEDURE ikhsan.create_employee()
  LANGUAGE plpgsql
 AS $procedure$
 BEGIN
-    CREATE TABLE IF NOT EXISTS stg.stg_employee_transaction AS 
+    CREATE TABLE IF NOT EXISTS ikhsan.male_employee3 AS 
     SELECT *, CURRENT_TIMESTAMP AS last_update 
-    FROM public.employee_transaction;
+    FROM public.male_employee;
 END;
 $procedure$
 ;
@@ -392,9 +393,7 @@ CREATE OR REPLACE PROCEDURE dwh.generate_employee()
  LANGUAGE plpgsql
 AS $procedure$
 BEGIN
-    INSERT INTO stg.stg_employee_transaction 
-    SELECT *, CURRENT_TIMESTAMP AS last_update 
-    FROM public.employee_transaction;
+    TRUNCATE TABLE ikhsan.male_employee3
 END;
 $procedure$
 ;
@@ -403,9 +402,9 @@ CREATE OR REPLACE PROCEDURE dwh.generate_employee()
  LANGUAGE plpgsql
 AS $procedure$
 BEGIN
-    INSERT INTO stg.stg_employee_transaction 
+    INSERT INTO ikhsan.male_employee3 
     SELECT *, CURRENT_TIMESTAMP AS last_update 
-    FROM public.employee_transaction;
+    FROM public.male_employee;
 END;
 $procedure$
 ;
