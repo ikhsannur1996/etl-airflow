@@ -333,32 +333,35 @@ with DAG('call_query_dag', default_args=default_args, schedule_interval='@daily'
     
     # Extract data using SQL query
     extract_query = """
-    SELECT * FROM your_table;
+    CREATE TABLE IF NOT EXISTS "output".employee_output AS 
+    SELECT *
+    FROM public.employee;
     """
     extract_task = PostgresOperator(
         task_id='extract_data',
-        postgres_conn_id='postgres_default',
+        postgres_conn_id='postgres',
         sql=extract_query
     )
     
     # Transform data using SQL query (optional)
     transform_query = """
-    -- Your transformation query here
+    TRUNCATE TABLE "output".employee_output;
     """
     transform_task = PostgresOperator(
         task_id='transform_data',
-        postgres_conn_id='postgres_default',
+        postgres_conn_id='postgres',
         sql=transform_query
     )
     
     # Load data using SQL query
     load_query = """
-    INSERT INTO target_table
-    SELECT * FROM your_extracted_table;
+    INSERT INTO "output".employee_output 
+    SELECT *
+    FROM public.employee;
     """
     load_task = PostgresOperator(
         task_id='load_data_to_database',
-        postgres_conn_id='postgres_default',
+        postgres_conn_id='postgres',
         sql=load_query
     )
     
@@ -434,12 +437,25 @@ default_args = {
 # Define the DAG
 with DAG('call_stored_procedure_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
     
-    call_stored_procedure_task = PostgresOperator(
-        task_id='call_stored_procedure',
-        postgres_conn_id='postgres_default',
-        sql="CALL your_stored_procedure();"
+    call_stored_procedure_task_create = PostgresOperator(
+        task_id='call_stored_procedure_crate',
+        postgres_conn_id='postgres',
+        sql="CALL public.create_employee();"
     )
-```
 
+    call_stored_procedure_task_truncate = PostgresOperator(
+        task_id='call_stored_procedure_truncate',
+        postgres_conn_id='postgres',
+        sql="CALL public.truncate_employee();"
+    )
+
+    call_stored_procedure_task_insert = PostgresOperator(
+        task_id='call_stored_procedure_insert',
+        postgres_conn_id='postgres',
+        sql="CALL public.insert_employee();"
+    )
+
+    call_stored_procedure_task_create >> call_stored_procedure_task_truncate >> call_stored_procedure_task_insert
+```
 
 These Airflow DAG scripts provide a foundation for automating various data pipeline tasks and database interactions. By leveraging Airflow's flexibility and scalability, users can customize and extend these workflows to suit their specific requirements and environments.
