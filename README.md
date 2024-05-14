@@ -376,35 +376,39 @@ This DAG triggers the execution of a stored procedure in a database. It is usefu
 
 ### Store Procedure:
 ```sql
-------- CREATE TABLE
-CREATE OR REPLACE PROCEDURE ikhsan.create_employee()
+-- DROP PROCEDURE public.create_employee();
+
+CREATE OR REPLACE PROCEDURE public.create_employee()
  LANGUAGE plpgsql
 AS $procedure$
 BEGIN
-    CREATE TABLE IF NOT EXISTS ikhsan.male_employee3 AS 
-    SELECT *, CURRENT_TIMESTAMP AS last_update 
-    FROM public.male_employee;
+    CREATE TABLE IF NOT EXISTS "output".employee_output AS 
+    SELECT *
+    FROM public.employee;
 END;
 $procedure$
 ;
 
-------- TRUNCATE TABLE
-CREATE OR REPLACE PROCEDURE dwh.generate_employee()
+-- DROP PROCEDURE public.insert_employee();
+
+CREATE OR REPLACE PROCEDURE public.insert_employee()
  LANGUAGE plpgsql
 AS $procedure$
 BEGIN
-    TRUNCATE TABLE ikhsan.male_employee3
+    INSERT INTO "output".employee_ouput 
+    SELECT *
+    FROM public.employee;
 END;
 $procedure$
 ;
-------- INSERT TABLE
-CREATE OR REPLACE PROCEDURE dwh.generate_employee()
+
+-- DROP PROCEDURE public.truncate_employee();
+
+CREATE OR REPLACE PROCEDURE public.truncate_employee()
  LANGUAGE plpgsql
 AS $procedure$
 BEGIN
-    INSERT INTO ikhsan.male_employee3 
-    SELECT *, CURRENT_TIMESTAMP AS last_update 
-    FROM public.male_employee;
+    TRUNCATE TABLE "output".employee_output;
 END;
 $procedure$
 ;
