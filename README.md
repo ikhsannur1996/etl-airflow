@@ -374,7 +374,7 @@ This DAG triggers the execution of a stored procedure in a database. It is usefu
 ### Task Details:
 - **Call Stored Procedure**: This task uses the PostgresOperator (or appropriate operator for the database type) to execute a predefined stored procedure in the target database. It ensures that the execution status of the stored procedure is monitored.
 
-Store Procedure
+### Store Procedure:
 ```sql
 ------- CREATE TABLE
 CREATE OR REPLACE PROCEDURE ikhsan.create_employee()
@@ -410,8 +410,7 @@ $procedure$
 ;
 ```
 
-Calling Store Procedure DAG:
-
+### Calling Store Procedure DAG:
 ```python
 from datetime import datetime, timedelta
 from airflow import DAG
