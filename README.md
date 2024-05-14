@@ -266,16 +266,35 @@ def transform_data(**context):
     
     df = pd.DataFrame(data, columns=column_names)
     
-    # Apply your transformations here, e.g., filter, add columns, etc.
+    # Example transformation: Ensure date columns are converted to datetime
+    date_columns = ['hire_date']  # Replace with your actual date columns
+    for col in date_columns:
+        df[col] = pd.to_datetime(df[col])
+    
+    # Apply other transformations as needed
     transformed_df = df  # Placeholder for actual transformations
+    
+    # Convert date columns to string to avoid serialization issues
+    for col in date_columns:
+        transformed_df[col] = transformed_df[col].astype(str)
+    
+    # Get the data types
+    column_types = transformed_df.dtypes.apply(lambda x: x.name).to_dict()
     
     # Convert DataFrame to list of dictionaries for loading
     transformed_data = transformed_df.to_dict(orient='records')
+    
+    # Pass column types to the next task via XCom
+    context['ti'].xcom_push(key='column_types', value=column_types)
+    
     return transformed_data
 
-# Function to load data into target database
+
 def load_data_to_target(**kwargs):
+    from airflow.hooks.postgres_hook import PostgresHook
+    
     transformed_data = kwargs['ti'].xcom_pull(task_ids='transform_data')
+    column_types = kwargs['ti'].xcom_pull(key='column_types', task_ids='transform_data')
     
     if not transformed_data:
         raise ValueError("No data available to load.")
@@ -286,19 +305,50 @@ def load_data_to_target(**kwargs):
     # Infer target table columns from transformed data
     target_columns = transformed_data[0].keys()
     
+    # Map pandas dtypes to PostgreSQL types
+    dtype_mapping = {
+        'int64': 'INTEGER',
+        'float64': 'DOUBLE PRECISION',
+        'object': 'TEXT',
+        'bool': 'BOOLEAN',
+        'datetime64[ns]': 'TIMESTAMP',
+        'datetime64[ns] (date)': 'DATE'
+    }
+    
+    # Generate column definitions with correct data types
+    column_definitions = [f"{col} {dtype_mapping[column_types[col]]}" for col in target_columns]
+    
     # Automatically create table if it doesn't exist
     create_query = f"""
     CREATE TABLE IF NOT EXISTS ikhsan.employee (
-        {', '.join([f'{col} TEXT' for col in target_columns])}
+        {', '.join(column_definitions)}
     );
     """
     postgres_hook.run(create_query)
     
-    # Prepare rows for insertion
-    rows = [tuple(record[col] for col in target_columns) for record in transformed_data]
+    # Prepare rows for insertion and convert date columns back to datetime
+    date_columns = [col for col, dtype in column_types.items() if dtype == 'datetime64[ns]']
+    for record in transformed_data:
+        for col in date_columns:
+            record[col] = pd.to_datetime(record[col])
     
     # Load data into target table
-    postgres_hook.insert_rows(table='employee', rows=rows, scheme='ikhsan', target_fields=target_columns)
+    table_name = 'ikhsan.employee'
+    insert_query = f"""
+    INSERT INTO {table_name} ({', '.join(target_columns)})
+    VALUES %s
+    """
+    
+    from psycopg2.extras import execute_values
+    connection = postgres_hook.get_conn()
+    cursor = connection.cursor()
+    
+    rows = [tuple(record[col] for col in target_columns) for record in transformed_data]
+    execute_values(cursor, insert_query, rows)
+    
+    connection.commit()
+    cursor.close()
+    connection.close()
 
 # Define the DAG
 with DAG('db_to_db_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
