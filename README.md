@@ -374,6 +374,43 @@ This DAG triggers the execution of a stored procedure in a database. It is usefu
 ### Task Details:
 - **Call Stored Procedure**: This task uses the PostgresOperator (or appropriate operator for the database type) to execute a predefined stored procedure in the target database. It ensures that the execution status of the stored procedure is monitored.
 
+```sql
+------- CREATE TABLE
+CREATE OR REPLACE PROCEDURE dwh.generate_employee()
+ LANGUAGE plpgsql
+AS $procedure$
+BEGIN
+    CREATE TABLE IF NOT EXISTS stg.stg_employee_transaction AS 
+    SELECT *, CURRENT_TIMESTAMP AS last_update 
+    FROM public.employee_transaction;
+END;
+$procedure$
+;
+
+------- TRUNCATE TABLE
+CREATE OR REPLACE PROCEDURE dwh.generate_employee()
+ LANGUAGE plpgsql
+AS $procedure$
+BEGIN
+    INSERT INTO stg.stg_employee_transaction 
+    SELECT *, CURRENT_TIMESTAMP AS last_update 
+    FROM public.employee_transaction;
+END;
+$procedure$
+;
+------- INSERT TABLE
+CREATE OR REPLACE PROCEDURE dwh.generate_employee()
+ LANGUAGE plpgsql
+AS $procedure$
+BEGIN
+    INSERT INTO stg.stg_employee_transaction 
+    SELECT *, CURRENT_TIMESTAMP AS last_update 
+    FROM public.employee_transaction;
+END;
+$procedure$
+;
+```
+
 ```python
 from datetime import datetime, timedelta
 from airflow import DAG
