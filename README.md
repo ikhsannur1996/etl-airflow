@@ -75,7 +75,7 @@ def load_data_to_database(**kwargs):
         postgres_hook.run(create_query)
     
     # Insert data into the table
-    postgres_hook.insert_rows(table='male_employee', rows=transformed_data.values.tolist())
+    postgres_hook.insert_rows(table='male_employee', scheme='ikhsan',rows=transformed_data.values.tolist())
 
 # Define the DAG
 with DAG('csv_to_database_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
