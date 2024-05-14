@@ -395,7 +395,7 @@ CREATE OR REPLACE PROCEDURE public.insert_employee()
  LANGUAGE plpgsql
 AS $procedure$
 BEGIN
-    INSERT INTO "output".employee_ouput 
+    INSERT INTO "output".employee_output 
     SELECT *
     FROM public.employee;
 END;
