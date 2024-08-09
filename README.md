@@ -34,7 +34,7 @@ default_args = {
 
 # Function to extract data from CSV
 def extract_data():
-    data = pd.read_csv('/opt/airflow/dags/dataset/employee_transaction.csv')
+    data = pd.read_csv('/opt/airflow/dags/dataset/employee.csv')
     return data
 
 # Function to transform data
