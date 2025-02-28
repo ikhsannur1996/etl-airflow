@@ -507,7 +507,7 @@ default_args = {
 with DAG('call_stored_procedure_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
     
     call_stored_procedure_task_create = PostgresOperator(
-        task_id='call_stored_procedure_crate',
+        task_id='call_stored_procedure_create',
         postgres_conn_id='postgres',
         sql="CALL public.create_employee();"
     )
