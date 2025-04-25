@@ -242,7 +242,7 @@ def transform_data(**kwargs):
     json_data = kwargs['ti'].xcom_pull(task_ids='extract_data_from_source', key='employee_data')
     df = pd.read_json(json_data)
     
-    transformed_df = df[df['gender'] == 'f']
+    transformed_df = df[df['gender'] == 'Female']
     transformed_json = transformed_df.to_json(orient='records')
     
     kwargs['ti'].xcom_push(key='transformed_data', value=transformed_json)
