@@ -215,8 +215,9 @@ from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 import pandas as pd
+import json
 
-# Define default arguments
+# Default arguments
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
@@ -227,81 +228,75 @@ default_args = {
     'start_date': datetime(2024, 5, 1),
 }
 
-def get_column_names(schema_name, table_name):
+# Extract task
+def extract_data_from_source(**kwargs):
     postgres_hook = PostgresHook(postgres_conn_id='postgres')
-    sql = f"""
-    SELECT column_name 
-    FROM information_schema.columns 
-    WHERE table_schema = '{schema_name}' AND table_name = '{table_name}';
-    """
-    columns = postgres_hook.get_records(sql)
-    column_names = [col[0] for col in columns]
-    return column_names
+    df = postgres_hook.get_pandas_df(sql="SELECT * FROM public.employee;")
+    
+    # Serialize to JSON string (safe for XCom)
+    json_data = df.to_json(orient='records')
+    kwargs['ti'].xcom_push(key='employee_data', value=json_data)
 
-def extract_data_from_source():
-    postgres_hook = PostgresHook(postgres_conn_id='postgres')
-    data = postgres_hook.get_records(sql="SELECT * FROM public.employee;")
-    return data
-
+# Transform task
 def transform_data(**kwargs):
-    data = kwargs['ti'].xcom_pull(task_ids='extract_data_from_source')
-    # Transform JSON data to DataFrame
-    df = pd.DataFrame(data)
+    json_data = kwargs['ti'].xcom_pull(task_ids='extract_data_from_source', key='employee_data')
+    df = pd.read_json(json_data)
     
-    # Filter and transform data using pandas
-    transformed_df = df[df['gender'] == 'f'] 
+    transformed_df = df[df['gender'] == 'f']
+    transformed_json = transformed_df.to_json(orient='records')
     
-    return transformed_df
-    
+    kwargs['ti'].xcom_push(key='transformed_data', value=transformed_json)
 
-## Define Schema before load ( Change to your schema name)
+# Custom schema and table
 custom_schema = 'ikhsan'
-
-## Define Table before load ( Change to your table name)
 custom_table = 'employee_output'
 
-# Function to load data into database
-# Define the custom schema name
+# Load task
 def load_data_to_database(**kwargs):
-    transformed_data = kwargs['ti'].xcom_pull(task_ids='transform_data')
-    
-    # Retrieve connection from Airflow
+    transformed_json = kwargs['ti'].xcom_pull(task_ids='transform_data', key='transformed_data')
+    df = pd.read_json(transformed_json)
+
     postgres_hook = PostgresHook(postgres_conn_id='postgres')
-    
-    # Analyze data types of transformed data
-    data_types = {col: 'TEXT' for col, dtype in transformed_data.dtypes.items()}
-    
-    # Create table if it doesn't exist
+    engine = postgres_hook.get_sqlalchemy_engine()
+
+    # Create schema and table if not exist
+    data_types = {col: 'TEXT' for col in df.columns}
+
     create_query = f"""
+    CREATE SCHEMA IF NOT EXISTS {custom_schema};
     CREATE TABLE IF NOT EXISTS {custom_schema}.{custom_table} (
-        {', '.join([f'{col} {data_types[col]}' for col in transformed_data.columns])}
+        {', '.join([f'{col} {data_types[col]}' for col in df.columns])}
     );
     """
     postgres_hook.run(create_query)
-    
-    # Load data into the table with custom schema
-    transformed_data.to_sql(custom_table, postgres_hook.get_sqlalchemy_engine(), schema=custom_schema, if_exists='append', index=False)
 
-# Define the DAG
-with DAG('db_to_db_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
-    
+    # Load data to table
+    df.to_sql(custom_table, engine, schema=custom_schema, if_exists='append', index=False)
+
+# Define DAG
+with DAG('db_to_db_dag',
+         default_args=default_args,
+         schedule_interval='@daily',
+         catchup=False) as dag:
+
     extract_task = PythonOperator(
         task_id='extract_data_from_source',
-        python_callable=extract_data_from_source
+        python_callable=extract_data_from_source,
+        provide_context=True
     )
-    
+
     transform_task = PythonOperator(
         task_id='transform_data',
         python_callable=transform_data,
         provide_context=True
     )
-    
+
     load_task = PythonOperator(
         task_id='load_data_to_target',
-        python_callable=load_data_to_target,
+        python_callable=load_data_to_database,
         provide_context=True
     )
-    
+
     extract_task >> transform_task >> load_task
 ```
 
