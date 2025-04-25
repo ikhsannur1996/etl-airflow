@@ -41,10 +41,6 @@ def extract_data():
 def transform_data(**kwargs):
     # Retrieve data from XCom
     data = kwargs['ti'].xcom_pull(task_ids='extract_data')
-
-    # Trim whitespace from all string columns
-    for col in df.select_dtypes(include=['object']).columns:
-        df[col] = df[col].str.strip()
     
     # Transform data  # Filter data where gender is 'male'
     transformed_data =  data[data['gender'] == 'Male']    
@@ -149,7 +145,11 @@ def transform_data(**kwargs):
     data = kwargs['ti'].xcom_pull(task_ids='fetch_data_from_api')
     # Transform JSON data to DataFrame
     df = pd.DataFrame(data)
-    
+
+    # Trim whitespace from all string columns
+    for col in df.select_dtypes(include=['object']).columns:
+        df[col] = df[col].str.strip()
+
     # Filter and transform data using pandas
     transformed_df = df[df['gender'] == 'f'] 
     
