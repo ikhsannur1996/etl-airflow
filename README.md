@@ -77,6 +77,10 @@ def load_data_to_database(**kwargs):
     # Load data into the table with custom schema
     transformed_data.to_sql(custom_table, postgres_hook.get_sqlalchemy_engine(), schema=custom_schema, if_exists='append', index=False)
 
+    # Note
+    # if_exists='append' --> Each DAG run will add the data
+    # if_exists='replace' --> Each DAG run will replace the data
+
 
 # Define the DAG
 with DAG('csv_to_database_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
@@ -175,6 +179,10 @@ def load_data_to_database(**kwargs):
     # Load data into the table with custom schema
     transformed_data.to_sql(custom_table, postgres_hook.get_sqlalchemy_engine(), schema=custom_schema, if_exists='append', index=False)
 
+    # Note
+    # if_exists='append' --> Each DAG run will add the data
+    # if_exists='replace' --> Each DAG run will replace the data
+
 
 # Define the DAG
 with DAG('api_to_database_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
@@ -272,6 +280,10 @@ def load_data_to_database(**kwargs):
 
     # Load data to table
     df.to_sql(custom_table, engine, schema=custom_schema, if_exists='append', index=False)
+
+    # Note
+    # if_exists='append' --> Each DAG run will add the data
+    # if_exists='replace' --> Each DAG run will replace the data
 
 # Define DAG
 with DAG('db_to_db_dag',
