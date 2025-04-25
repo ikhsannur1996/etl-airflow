@@ -73,7 +73,7 @@ def load_data_to_database(**kwargs):
     postgres_hook.run(create_query)
     
     # Load data into the table with custom schema
-    transformed_data.to_sql('api_table', postgres_hook.get_sqlalchemy_engine(), schema=custom_schema, if_exists='append', index=False)
+    transformed_data.to_sql('male_employee', postgres_hook.get_sqlalchemy_engine(), schema=custom_schema, if_exists='append', index=False)
 
 
 # Define the DAG
@@ -269,65 +269,29 @@ def transform_data(**context):
     return transformed_data
 
 
-def load_data_to_target(**kwargs):
-    from airflow.hooks.postgres_hook import PostgresHook
-    
+custom_schema = 'ikhsan'
+
+# Function to load data into database
+# Define the custom schema name
+def load_data_to_database(**kwargs):
     transformed_data = kwargs['ti'].xcom_pull(task_ids='transform_data')
-    column_types = kwargs['ti'].xcom_pull(key='column_types', task_ids='transform_data')
     
-    if not transformed_data:
-        raise ValueError("No data available to load.")
-    
-    # Retrieve target database connection
+    # Retrieve connection from Airflow
     postgres_hook = PostgresHook(postgres_conn_id='postgres')
     
-    # Infer target table columns from transformed data
-    target_columns = transformed_data[0].keys()
+    # Analyze data types of transformed data
+    data_types = {col: 'TEXT' for col, dtype in transformed_data.dtypes.items()}
     
-    # Map pandas dtypes to PostgreSQL types
-    dtype_mapping = {
-        'int64': 'INTEGER',
-        'float64': 'DOUBLE PRECISION',
-        'object': 'TEXT',
-        'bool': 'BOOLEAN',
-        'datetime64[ns]': 'TIMESTAMP',
-        'datetime64[ns] (date)': 'DATE'
-    }
-    
-    # Generate column definitions with correct data types
-    column_definitions = [f"{col} {dtype_mapping[column_types[col]]}" for col in target_columns]
-    
-    # Automatically create table if it doesn't exist
+    # Create table if it doesn't exist
     create_query = f"""
-    CREATE TABLE IF NOT EXISTS ikhsan.employee (
-        {', '.join(column_definitions)}
+    CREATE TABLE IF NOT EXISTS {custom_schema}.employee_output (
+        {', '.join([f'{col} {data_types[col]}' for col in transformed_data.columns])}
     );
     """
     postgres_hook.run(create_query)
     
-    # Prepare rows for insertion and convert date columns back to datetime
-    date_columns = [col for col, dtype in column_types.items() if dtype == 'datetime64[ns]']
-    for record in transformed_data:
-        for col in date_columns:
-            record[col] = pd.to_datetime(record[col])
-    
-    # Load data into target table
-    table_name = 'ikhsan.employee'
-    insert_query = f"""
-    INSERT INTO {table_name} ({', '.join(target_columns)})
-    VALUES %s
-    """
-    
-    from psycopg2.extras import execute_values
-    connection = postgres_hook.get_conn()
-    cursor = connection.cursor()
-    
-    rows = [tuple(record[col] for col in target_columns) for record in transformed_data]
-    execute_values(cursor, insert_query, rows)
-    
-    connection.commit()
-    cursor.close()
-    connection.close()
+    # Load data into the table with custom schema
+    transformed_data.to_sql('employee_output', postgres_hook.get_sqlalchemy_engine(), schema=custom_schema, if_exists='append', index=False)
 
 # Define the DAG
 with DAG('db_to_db_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
