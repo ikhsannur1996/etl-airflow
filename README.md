@@ -51,50 +51,29 @@ def transform_data(**kwargs):
 
 
 # Function to load data into database
+custom_schema = 'ikhsan'
+
+# Function to load data into database
+# Define the custom schema name
 def load_data_to_database(**kwargs):
-    from airflow.hooks.postgres_hook import PostgresHook
-    
     transformed_data = kwargs['ti'].xcom_pull(task_ids='transform_data')
+    
+    # Retrieve connection from Airflow
     postgres_hook = PostgresHook(postgres_conn_id='postgres')
     
-    table_exists_query = """
-    SELECT EXISTS (
-        SELECT 1
-        FROM information_schema.tables
-        WHERE table_schema = 'ikhsan'
-        AND table_name = 'male_employee'
+    # Analyze data types of transformed data
+    data_types = {col: 'TEXT' for col, dtype in transformed_data.dtypes.items()}
+    
+    # Create table if it doesn't exist
+    create_query = f"""
+    CREATE TABLE IF NOT EXISTS {custom_schema}.male_employee (
+        {', '.join([f'{col} {data_types[col]}' for col in transformed_data.columns])}
     );
     """
-    table_exists = postgres_hook.get_first(table_exists_query)[0]
+    postgres_hook.run(create_query)
     
-    if not table_exists:
-        # If table doesn't exist, create it
-        create_query = f"""
-        CREATE TABLE ikhsan.male_employee (
-            {', '.join([f'{col} TEXT' for col in transformed_data.columns])}
-        );
-        """
-        postgres_hook.run(create_query)
-    
-    # Insert data into the table
-    insert_query = """
-    INSERT INTO ikhsan.male_employee ({columns})
-    VALUES %s
-    """
-    
-    columns = ', '.join(transformed_data.columns)
-    values = transformed_data.values.tolist()
-    
-    # Using execute_values to insert multiple rows
-    from psycopg2.extras import execute_values
-    connection = postgres_hook.get_conn()
-    cursor = connection.cursor()
-    
-    execute_values(cursor, insert_query.format(columns=columns), values)
-    
-    connection.commit()
-    cursor.close()
-    connection.close()
+    # Load data into the table with custom schema
+    transformed_data.to_sql('api_table', postgres_hook.get_sqlalchemy_engine(), schema=custom_schema, if_exists='append', index=False)
 
 
 # Define the DAG
