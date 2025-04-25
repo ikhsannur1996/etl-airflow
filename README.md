@@ -38,7 +38,6 @@ def extract_data():
     return data
 
 # Function to transform data
-# Function to transform data
 def transform_data(**kwargs):
     # Retrieve data from XCom
     data = kwargs['ti'].xcom_pull(task_ids='extract_data')
@@ -50,8 +49,11 @@ def transform_data(**kwargs):
     return transformed_data
 
 
-# Function to load data into database
+## Define Schema before load ( Change to your schema name)
 custom_schema = 'ikhsan'
+
+## Define Table before load ( Change to your table name)
+custom_table = 'male_employee'
 
 # Function to load data into database
 # Define the custom schema name
@@ -66,14 +68,14 @@ def load_data_to_database(**kwargs):
     
     # Create table if it doesn't exist
     create_query = f"""
-    CREATE TABLE IF NOT EXISTS {custom_schema}.male_employee (
+    CREATE TABLE IF NOT EXISTS {custom_schema}.{custom_table} (
         {', '.join([f'{col} {data_types[col]}' for col in transformed_data.columns])}
     );
     """
     postgres_hook.run(create_query)
     
     # Load data into the table with custom schema
-    transformed_data.to_sql('male_employee', postgres_hook.get_sqlalchemy_engine(), schema=custom_schema, if_exists='append', index=False)
+    transformed_data.to_sql(custom_table, postgres_hook.get_sqlalchemy_engine(), schema=custom_schema, if_exists='append', index=False)
 
 
 # Define the DAG
@@ -145,7 +147,11 @@ def transform_data(**kwargs):
     
     return transformed_df
 
+## Define Schema before load ( Change to your schema name)
 custom_schema = 'ikhsan'
+
+## Define Table before load ( Change to your table name)
+custom_table = 'api_table'
 
 # Function to load data into database
 # Define the custom schema name
@@ -160,14 +166,14 @@ def load_data_to_database(**kwargs):
     
     # Create table if it doesn't exist
     create_query = f"""
-    CREATE TABLE IF NOT EXISTS {custom_schema}.api_table (
+    CREATE TABLE IF NOT EXISTS {custom_schema}.{custom_table} (
         {', '.join([f'{col} {data_types[col]}' for col in transformed_data.columns])}
     );
     """
     postgres_hook.run(create_query)
     
     # Load data into the table with custom schema
-    transformed_data.to_sql('api_table', postgres_hook.get_sqlalchemy_engine(), schema=custom_schema, if_exists='append', index=False)
+    transformed_data.to_sql(custom_table, postgres_hook.get_sqlalchemy_engine(), schema=custom_schema, if_exists='append', index=False)
 
 
 # Define the DAG
@@ -237,39 +243,22 @@ def extract_data_from_source():
     data = postgres_hook.get_records(sql="SELECT * FROM public.employee;")
     return data
 
-def transform_data(**context):
-    data = context['ti'].xcom_pull(task_ids='extract_data_from_source')
-    schema_name = 'public'
-    table_name = 'employee'
-    column_names = get_column_names(schema_name, table_name)
+def transform_data(**kwargs):
+    data = kwargs['ti'].xcom_pull(task_ids='extract_data_from_source')
+    # Transform JSON data to DataFrame
+    df = pd.DataFrame(data)
     
-    df = pd.DataFrame(data, columns=column_names)
+    # Filter and transform data using pandas
+    transformed_df = df[df['gender'] == 'f'] 
     
-    # Example transformation: Ensure date columns are converted to datetime
-    date_columns = ['hire_date']  # Replace with your actual date columns
-    for col in date_columns:
-        df[col] = pd.to_datetime(df[col])
+    return transformed_df
     
-    # Apply other transformations as needed
-    transformed_df = df  # Placeholder for actual transformations
-    
-    # Convert date columns to string to avoid serialization issues
-    for col in date_columns:
-        transformed_df[col] = transformed_df[col].astype(str)
-    
-    # Get the data types
-    column_types = transformed_df.dtypes.apply(lambda x: x.name).to_dict()
-    
-    # Convert DataFrame to list of dictionaries for loading
-    transformed_data = transformed_df.to_dict(orient='records')
-    
-    # Pass column types to the next task via XCom
-    context['ti'].xcom_push(key='column_types', value=column_types)
-    
-    return transformed_data
 
-
+## Define Schema before load ( Change to your schema name)
 custom_schema = 'ikhsan'
+
+## Define Table before load ( Change to your table name)
+custom_table = 'employee_output'
 
 # Function to load data into database
 # Define the custom schema name
@@ -284,14 +273,14 @@ def load_data_to_database(**kwargs):
     
     # Create table if it doesn't exist
     create_query = f"""
-    CREATE TABLE IF NOT EXISTS {custom_schema}.employee_output (
+    CREATE TABLE IF NOT EXISTS {custom_schema}.{custom_table} (
         {', '.join([f'{col} {data_types[col]}' for col in transformed_data.columns])}
     );
     """
     postgres_hook.run(create_query)
     
     # Load data into the table with custom schema
-    transformed_data.to_sql('employee_output', postgres_hook.get_sqlalchemy_engine(), schema=custom_schema, if_exists='append', index=False)
+    transformed_data.to_sql(custom_table, postgres_hook.get_sqlalchemy_engine(), schema=custom_schema, if_exists='append', index=False)
 
 # Define the DAG
 with DAG('db_to_db_dag', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
