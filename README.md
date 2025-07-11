@@ -261,7 +261,7 @@ def transform_data(**kwargs):
 
 # Custom schema and table
 custom_schema = 'ikhsan'
-custom_table = 'employee_output'
+custom_table = 'employee_output_db_to_db'
 
 # Load task
 def load_data_to_database(**kwargs):
@@ -345,7 +345,7 @@ with DAG('call_query_dag', default_args=default_args, schedule_interval='@daily'
     
     # Create table using SQL query
     create_query = """
-    CREATE TABLE IF NOT EXISTS "output".employee_output AS 
+    CREATE TABLE IF NOT EXISTS "output".employee_output_call_query AS 
     SELECT *
     FROM public.employee;
     """
@@ -357,7 +357,7 @@ with DAG('call_query_dag', default_args=default_args, schedule_interval='@daily'
     
     # Truncate table using SQL query
     truncate_query = """
-    TRUNCATE TABLE "output".employee_output;
+    TRUNCATE TABLE "output".employee_output_call_query;
     """
     truncate_task = PostgresOperator(
         task_id='truncate_data',
@@ -367,7 +367,7 @@ with DAG('call_query_dag', default_args=default_args, schedule_interval='@daily'
     
     # Load data using SQL query
     insert_query = """
-    INSERT INTO "output".employee_output 
+    INSERT INTO "output".employee_output_call_query 
     SELECT *
     FROM public.employee;
     """
@@ -397,7 +397,7 @@ CREATE OR REPLACE PROCEDURE public.create_employee()
  LANGUAGE plpgsql
 AS $procedure$
 BEGIN
-    CREATE TABLE IF NOT EXISTS "output".employee_output AS 
+    CREATE TABLE IF NOT EXISTS "output".employee_output_sp AS 
     SELECT *
     FROM public.employee;
 END;
@@ -410,7 +410,7 @@ CREATE OR REPLACE PROCEDURE public.insert_employee()
  LANGUAGE plpgsql
 AS $procedure$
 BEGIN
-    INSERT INTO "output".employee_output 
+    INSERT INTO "output".employee_output_sp
     SELECT *
     FROM public.employee;
 END;
@@ -423,7 +423,7 @@ CREATE OR REPLACE PROCEDURE public.truncate_employee()
  LANGUAGE plpgsql
 AS $procedure$
 BEGIN
-    TRUNCATE TABLE "output".employee_output;
+    TRUNCATE TABLE "output".employee_output_sp;
 END;
 $procedure$
 ;
