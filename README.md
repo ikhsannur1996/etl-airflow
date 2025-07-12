@@ -244,20 +244,14 @@ default_args = {
 def extract_data_from_source(**kwargs):
     postgres_hook = PostgresHook(postgres_conn_id='postgres')
     df = postgres_hook.get_pandas_df(sql="SELECT * FROM public.employee;")
-    
-    # Serialize to JSON string (safe for XCom)
-    json_data = df.to_json(orient='records')
-    kwargs['ti'].xcom_push(key='employee_data', value=json_data)
+    return df
 
 # Transform task
 def transform_data(**kwargs):
-    json_data = kwargs['ti'].xcom_pull(task_ids='extract_data_from_source', key='employee_data')
-    df = pd.read_json(json_data)
-    
-    transformed_df = df[df['gender'] == 'Female']
-    transformed_json = transformed_df.to_json(orient='records')
-    
-    kwargs['ti'].xcom_push(key='transformed_data', value=transformed_json)
+    df = kwargs['task_instance'].xcom_pull(task_ids='extract_data_from_data_souce')
+    transfomred_df = df[df['gender'] == 'Female']
+
+    return transfomred_df
 
 # Custom schema and table
 custom_schema = 'ikhsan'
