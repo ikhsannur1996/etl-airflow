@@ -248,7 +248,7 @@ def extract_data_from_source(**kwargs):
 
 # Transform task
 def transform_data(**kwargs):
-    df = kwargs['task_instance'].xcom_pull(task_ids='extract_data_from_data_souce')
+    df = kwargs['task_instance'].xcom_pull(task_ids='extract_data_from_souce')
     transfomred_df = df[df['gender'] == 'Female']
 
     return transfomred_df
