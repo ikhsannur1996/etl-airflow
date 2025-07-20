@@ -227,9 +227,7 @@ from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 import pandas as pd
-import json
 
-# Default arguments
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
@@ -240,27 +238,21 @@ default_args = {
     'start_date': datetime(2024, 5, 1),
 }
 
-# Extract task
 def extract_data_from_source(**kwargs):
     postgres_hook = PostgresHook(postgres_conn_id='postgres')
     df = postgres_hook.get_pandas_df(sql="SELECT * FROM public.employee;")
-    return df
+    return df  # Return DataFrame directly
 
-# Transform task
 def transform_data(**kwargs):
-    df = kwargs['task_instance'].xcom_pull(task_ids='extract_data_from_souce')
-    transfomred_df = df[df['gender'] == 'Female']
+    df = kwargs['ti'].xcom_pull(task_ids='extract_data_from_source')
+    filtered_df = df[df['gender'] == 'Female']
+    return filtered_df  # Return filtered DataFrame
 
-    return transfomred_df
-
-# Custom schema and table
 custom_schema = 'ikhsan'
 custom_table = 'employee_output_db_to_db'
 
-# Load task
 def load_data_to_database(**kwargs):
-    transformed_json = kwargs['ti'].xcom_pull(task_ids='transform_data', key='transformed_data')
-    df = pd.read_json(transformed_json)
+    df = kwargs['ti'].xcom_pull(task_ids='transform_data')
 
     postgres_hook = PostgresHook(postgres_conn_id='postgres')
     engine = postgres_hook.get_sqlalchemy_engine()
@@ -276,15 +268,9 @@ def load_data_to_database(**kwargs):
     """
     postgres_hook.run(create_query)
 
-    # Load data to table
     df.to_sql(custom_table, engine, schema=custom_schema, if_exists='append', index=False)
 
-    # Note
-    # if_exists='append' --> Each DAG run will add the data
-    # if_exists='replace' --> Each DAG run will replace the data
-
-# Define DAG
-with DAG('db_to_db_dag',
+with DAG('db_to_db_dag_sample',
          default_args=default_args,
          schedule_interval='@daily',
          catchup=False) as dag:
